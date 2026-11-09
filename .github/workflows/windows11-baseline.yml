@@ -1,0 +1,57 @@
+name: Windows 11 user32 baseline
+
+on:
+  push:
+    branches: [codex/windows11-baseline]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CCACHE_DISABLE: '1'
+
+jobs:
+  user32-lifetime:
+    runs-on: windows-11-arm
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Build AMD64 observation program
+        shell: cmd
+        run: |
+          if not exist output-tools mkdir output-tools
+          for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath`) do set "LIBERNT_VSROOT=%%I"
+          call "%LIBERNT_VSROOT%\Common7\Tools\VsDevCmd.bat" -no_logo -host_arch=arm64 -arch=x64
+          if errorlevel 1 exit /b 1
+          cl /nologo /W4 /WX /O1 /Zl /Fooutput-tools\user32_lifetime.obj modules\rostests\tests\user32_lifetime\user32_lifetime.c /link /NODEFAULTLIB /ENTRY:mainCRTStartup /SUBSYSTEM:CONSOLE /OUT:output-tools\user32_lifetime.exe kernel32.lib
+          if errorlevel 1 exit /b 1
+      - name: Record platform, privileges and executable hash
+        shell: pwsh
+        run: |
+          $metadata = [ordered]@{
+            source = '${{ github.sha }}'
+            os = [System.Environment]::OSVersion.VersionString
+            hostArchitecture = $env:PROCESSOR_ARCHITECTURE
+            testArchitecture = 'AMD64 (x64 emulation on ARM64)'
+            sha256 = (Get-FileHash output-tools/user32_lifetime.exe -Algorithm SHA256).Hash
+          }
+          $metadata | ConvertTo-Json | Set-Content output-tools/windows11-metadata.json
+          whoami /all > output-tools/windows11-privileges.txt
+      - name: Collect Windows 11 observations
+        shell: pwsh
+        run: |
+          & ./output-tools/user32_lifetime.exe | Tee-Object output-tools/windows11-user32-lifetime.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows11-user32-lifetime
+          path: |
+            output-tools/user32_lifetime.exe
+            output-tools/windows11-*.json
+            output-tools/windows11-*.txt
+          if-no-files-found: error
+          retention-days: 7

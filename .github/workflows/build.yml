@@ -7,6 +7,7 @@ permissions:
 
 jobs:
   build-linux:
+    if: github.ref != 'refs/heads/codex/windows11-baseline'
     strategy:
       matrix:
         include:
@@ -157,6 +158,7 @@ jobs:
       run: python3 sdk/tools/depcheck.py ${{steps.configure.outputs.outdir}} --mode depfiles --nested --fail-on-gaps
 
   build-msvc:
+    if: github.ref != 'refs/heads/codex/windows11-baseline'
     strategy:
       matrix:
         arch: [amd64, i386, arm64]

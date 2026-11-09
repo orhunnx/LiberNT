@@ -1,0 +1,3 @@
+add_executable(user32_lifetime user32_lifetime.c)
+set_module_type(user32_lifetime win32cui)
+add_importlibs(user32_lifetime kernel32)
